@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Central Code</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body class="public-page">
+    <a class="admin-link" href="/admin">Administrar</a>
+    <main class="public-layout">
+      <section class="card public-card shell">
+        <p class="eyebrow">CENTRAL CODE</p>
+        <h1>Encuentra tu código</h1>
+        <p class="intro">Consulta el código reciente de tu plataforma sin acceder a tu correo.</p>
+        <form id="lookup-form">
+          <label for="platform">Plataforma</label>
+          <select id="platform" required>
+            <option value="">Selecciona una plataforma</option>
+          </select>
+          <label for="code-type">Tipo de código</label>
+          <select id="code-type" required>
+            <option value="login">Código de inicio (PIN)</option>
+            <option value="household">Código de hogar / TV</option>
+          </select>
+          <label for="identifier">Número de celular</label>
+          <input id="identifier" type="tel" inputmode="tel" autocomplete="tel" minlength="7" maxlength="20" required placeholder="Ej. 3001234567" pattern="[0-9+\s()-]{7,20}">
+          <button id="submit-button" type="submit">Consultar código</button>
+        </form>
+        <section id="result" class="result" aria-live="polite" hidden>
+          <p class="result-label" id="result-label">Tu código es</p>
+          <strong id="code"></strong>
+          <button id="copy-button" class="secondary" type="button">Copiar código</button>
+          <a id="link-button" class="link-button" href="#" target="_blank" rel="noopener noreferrer" hidden>Obtener código en Netflix</a>
+          <p id="expires"></p>
+          <p id="subscription"></p>
+          <span id="access-badge" class="badge" hidden></span>
+        </section>
+        <section id="renewal" class="renewal" hidden>
+          <p id="renewal-message"></p>
+          <a id="whatsapp-button" class="whatsapp-button" href="#" target="_blank" rel="noopener noreferrer">Renovar por WhatsApp</a>
+        </section>
+        <p id="message" class="message" role="status"></p>
+        <a id="shop-toggle" class="shop-toggle" href="/tienda">
+          Comprar cuentas
+          <span id="cart-badge" class="cart-badge" hidden>0</span>
+        </a>
+      </section>
+    </main>
+    <script src="/static/api.js?v=20260923c"></script>
+    <script src="/static/app.js?v=20260923c"></script>
+    <script>
+      (function () {
+        try {
+          const cart = JSON.parse(localStorage.getItem("centralcode_cart_v1") || "{}");
+          const count = Object.values(cart).reduce((sum, qty) => sum + (Number(qty) || 0), 0);
+          const badge = document.querySelector("#cart-badge");
+          if (badge && count > 0) {
+            badge.hidden = false;
+            badge.textContent = String(count);
+          }
+        } catch (_) {}
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Administración - Central Code</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body class="admin-page">
+    <main class="admin-shell">
+      <section id="login-view" class="card narrow">
+        <a class="back-link" href="/">← Volver a consulta</a>
+        <p class="eyebrow">CENTRAL CODE</p>
+        <h1>Administración</h1>
+        <p class="intro">Administra cuentas principales, streaming y clientes.</p>
+        <form id="login-form">
+          <label for="admin-email">Correo administrador</label>
+          <input id="admin-email" type="email" autocomplete="username" required placeholder="admin@tudominio.com">
+          <label for="admin-password">Contraseña</label>
+          <input id="admin-password" type="password" autocomplete="current-password" required>
+          <button type="submit">Iniciar sesión</button>
+        </form>
+        <p id="login-message" class="message"></p>
+      </section>
+
+      <section id="dashboard" class="admin-app" hidden>
+        <aside class="admin-sidebar">
+          <div class="sidebar-brand">
+            <div class="brand-mark" aria-hidden="true"></div>
+            <div>
+              <p class="banner-kicker">Central Code</p>
+              <strong class="banner-title">Panel admin</strong>
+            </div>
+          </div>
+
+          <nav class="sidebar-nav" aria-label="Secciones">
+            <button type="button" class="nav-item active" data-panel="overview">
+              <span class="tab-label">Resumen</span>
+              <small>Estado general</small>
+            </button>
+            <button type="button" class="nav-item" data-panel="main">
+              <span class="tab-label">Principales</span>
+              <small>Bandejas IMAP</small>
+            </button>
+            <button type="button" class="nav-item" data-panel="streaming">
+              <span class="tab-label">Streaming</span>
+              <small>Cuentas de plataforma</small>
+            </button>
+            <button type="button" class="nav-item" data-panel="clients">
+              <span class="tab-label">Clientes</span>
+              <small>Celulares y accesos</small>
+            </button>
+            <button type="button" class="nav-item" data-panel="assign">
+              <span class="tab-label">Asociar</span>
+              <small>Vincular cuentas</small>
+            </button>
+            <button type="button" class="nav-item" data-panel="shop">
+              <span class="tab-label">Tienda</span>
+              <small>Precios y combos</small>
+            </button>
+          </nav>
+
+          <div class="sidebar-footer">
+            <a class="banner-link" href="/">Consulta pública</a>
+            <button id="logout-button" class="banner-logout" type="button">Cerrar sesión</button>
+          </div>
+        </aside>
+
+        <div class="admin-main">
+          <header class="admin-topbar">
+            <div>
+              <p class="eyebrow" id="panel-eyebrow">ESTADO GENERAL</p>
+              <h1 id="panel-title">Resumen</h1>
+            </div>
+            <p id="dashboard-message" class="message top-message"></p>
+          </header>
+
+          <div class="admin-content">
+            <section class="admin-panel active" data-panel="overview">
+              <div class="stats-grid" id="summary-stats"></div>
+              <article class="card panel-card">
+                <h2>Cuentas por vencer</h2>
+                <div id="expiring-list" class="cards-list"></div>
+              </article>
+              <article class="card panel-card">
+                <div class="card-head">
+                  <div>
+                    <h2>Actividad reciente</h2>
+                    <p class="form-hint">Quién entró y qué cambió en el panel.</p>
+                  </div>
+                </div>
+                <div id="audit-list" class="audit-timeline"></div>
+              </article>
+            </section>
+
+            <section class="admin-panel" data-panel="main" hidden>
+              <div class="panel-stack">
+                <article class="card panel-card">
+                  <div class="card-head">
+                    <h2 id="main-form-title">Agregar cuenta principal</h2>
+                    <button id="main-cancel-edit" class="secondary compact" type="button" hidden>Cancelar</button>
+                  </div>
+                  <p class="form-hint">Bandeja real donde llegan todos los códigos. El alias que das a los clientes (ej. cinecolred+bat@gmail.com) apunta a esta misma bandeja.</p>
+                  <form id="main-account-form" class="admin-form-grid">
+                    <input id="main-edit-id" type="hidden" value="">
+                    <div>
+                      <label for="main-name">Nombre</label>
+                      <input id="main-name" required placeholder="Bandeja RSD">
+                    </div>
+                    <div>
+                      <label for="main-email">Correo IMAP (cuenta principal)</label>
+                      <input id="main-email" type="email" required placeholder="cinecolred@gmail.com">
+                    </div>
+                    <div>
+                      <label for="main-password">Contraseña / app password</label>
+                      <input id="main-password" type="password" placeholder="Obligatoria al crear">
+                    </div>
+                    <div>
+                      <label for="main-domain">Dominio</label>
+                      <input id="main-domain" required placeholder="gmail.com" value="gmail.com">
+                    </div>
+                    <div>
+                      <label for="main-imap-host">Host IMAP</label>
+                      <input id="main-imap-host" required placeholder="imap.gmail.com" value="imap.gmail.com">
+                    </div>
+                    <div>
+                      <label for="main-imap-port">Puerto IMAP</label>
+                      <input id="main-imap-port" type="number" min="1" max="65535" value="993" required>
+                    </div>
+                    <div>
+                      <label for="main-imap-folder">Carpeta</label>
+                      <input id="main-imap-folder" value="INBOX" required>
+                    </div>
+                    <div class="form-actions">
+                      <button id="main-submit" type="submit">Agregar cuenta principal</button>
+                    </div>
+                  </form>
+                </article>
+                <article class="card panel-card">
+                  <div class="card-head">
+                    <h2>Listado</h2>
+                    <input id="main-search" class="search-input" type="search" placeholder="Buscar...">
+                  </div>
+                  <div id="main-accounts-list" class="cards-list"></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="admin-panel" data-panel="streaming" hidden>
+              <div class="panel-stack">
+                <article class="card panel-card">
+                  <div class="card-head">
+                    <h2 id="account-form-title">Agregar cuenta de streaming</h2>
+                    <button id="account-cancel-edit" class="secondary compact" type="button" hidden>Cancelar</button>
+                  </div>
+                  <form id="account-form">
+                    <input id="account-edit-id" type="hidden" value="">
+                    <label for="account-platform">Plataforma (producto de Tienda)</label>
+                    <select id="account-platform" required>
+                      <option value="">Selecciona un producto</option>
+                    </select>
+                    <p class="form-hint">Las plataformas salen de los productos activos en Tienda. Si no ves ninguna, créalas allí primero.</p>                    <label for="account-main">Cuenta principal (bandeja IMAP)</label>
+                    <select id="account-main">
+                      <option value="">Usar IMAP de .env</option>
+                    </select>
+                    <label for="account-email">Correo alias (el que das a los clientes)</label>
+                    <input id="account-email" type="email" required placeholder="cinecolred+bat@gmail.com">
+                    <p id="alias-preview" class="form-hint">Ese alias llega a la bandeja de la cuenta principal. No se modifica.</p>
+                    <label for="account-name">Nombre de la cuenta</label>
+                    <input id="account-name" required placeholder="Cuenta familiar">
+                    <label for="account-password">Contraseña de la cuenta</label>
+                    <input id="account-password" placeholder="Obligatoria al crear">
+                    <label for="account-expires">Fecha de vencimiento</label>
+                    <input id="account-expires" type="datetime-local" required>
+                    <button id="account-submit" type="submit">Agregar cuenta</button>
+                  </form>
+                </article>
+                <article class="card panel-card">
+                  <div class="card-head">
+                    <h2>Listado</h2>
+                    <input id="account-search" class="search-input" type="search" placeholder="Buscar...">
+                  </div>
+                  <div id="accounts-list" class="cards-list"></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="admin-panel" data-panel="clients" hidden>
+              <div class="panel-stack">
+                <article class="card panel-card">
+                  <div class="card-head">
+                    <h2 id="client-form-title">Agregar cliente</h2>
+                    <button id="client-cancel-edit" class="secondary compact" type="button" hidden>Cancelar</button>
+                  </div>
+                  <form id="client-form">
+                    <input id="client-edit-id" type="hidden" value="">
+                    <label for="client-name">Nombre completo</label>
+                    <input id="client-name" required>
+                    <label for="client-phone">Celular</label>
+                    <input id="client-phone" type="tel" required>
+                    <button id="client-submit" type="submit">Agregar cliente</button>
+                  </form>
+                </article>
+                <article class="card panel-card">
+                  <div class="card-head">
+                    <h2>Listado</h2>
+                    <input id="client-search" class="search-input" type="search" placeholder="Buscar...">
+                  </div>
+                  <div id="clients-list" class="cards-list"></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="admin-panel" data-panel="assign" hidden>
+              <div class="panel-stack">
+                <article class="card panel-card">
+                  <h2>Asociar cuenta a cliente</h2>
+                  <p class="form-hint">Vincula una cuenta de streaming con el celular del cliente. El acceso a códigos vence automáticamente 30 días después de la fecha de asociación.</p>
+                  <form id="assignment-form" class="assign-form">
+                    <div>
+                      <label for="assignment-client">Cliente</label>
+                      <select id="assignment-client" required><option value="">Cliente</option></select>
+                    </div>
+                    <div>
+                      <label for="assignment-account">Cuenta</label>
+                      <select id="assignment-account" required><option value="">Cuenta</option></select>
+                    </div>
+                    <div>
+                      <label for="assignment-date">Fecha de asociación</label>
+                      <input id="assignment-date" type="datetime-local" required>
+                    </div>
+                    <div class="form-actions">
+                      <button type="submit">Asociar</button>
+                    </div>
+                  </form>
+                  <div class="urgency-legend">
+                    <span class="legend-label">Leyenda:</span>
+                    <span class="badge green">Más de 20 días</span>
+                    <span class="badge yellow">Menos de 20 días</span>
+                    <span class="badge red">Menos de 10 días</span>
+                  </div>
+                </article>
+                <article class="card panel-card">
+                  <div class="card-head">
+                    <h2>Asociaciones</h2>
+                    <input id="assignment-search" class="search-input" type="search" placeholder="Buscar...">
+                  </div>
+                  <div id="assignments-list" class="cards-list"></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="admin-panel" data-panel="shop" hidden>
+              <div class="stats-grid" id="shop-summary-stats"></div>
+              <div class="shop-admin-tabs" role="tablist">
+                <button type="button" class="shop-tab active" data-shop-tab="products">Productos</button>
+                <button type="button" class="shop-tab" data-shop-tab="combos">Combos</button>
+                <button type="button" class="shop-tab" data-shop-tab="discounts">Descuentos</button>
+                <button type="button" class="shop-tab" data-shop-tab="stock">Cuentas</button>
+              </div>
+
+              <div class="shop-admin-pane active" data-shop-tab="products">
+                <div class="panel-stack">
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2 id="shop-product-form-title">Agregar producto</h2>
+                      <button id="shop-product-cancel" class="secondary compact" type="button" hidden>Cancelar</button>
+                    </div>
+                    <form id="shop-product-form" class="admin-form-grid">
+                      <input id="shop-product-edit-id" type="hidden" value="">
+                      <div>
+                        <label for="shop-product-label">Nombre</label>
+                        <input id="shop-product-label" required placeholder="Netflix">
+                      </div>
+                      <div>
+                        <label for="shop-product-key">Clave (opcional)</label>
+                        <input id="shop-product-key" placeholder="netflix">
+                      </div>
+                      <div>
+                        <label for="shop-product-price">Precio COP</label>
+                        <input id="shop-product-price" type="number" min="0" step="1000" required placeholder="25000">
+                      </div>
+                      <div>
+                        <label for="shop-product-category">Categoría</label>
+                        <input id="shop-product-category" list="shop-category-list" required value="Streaming">
+                        <datalist id="shop-category-list"></datalist>
+                      </div>
+                      <div>
+                        <label for="shop-product-active">Estado</label>
+                        <select id="shop-product-active">
+                          <option value="1">Activo</option>
+                          <option value="0">Oculto</option>
+                        </select>
+                      </div>
+                      <div class="full-row">
+                        <label for="shop-product-blurb">Descripción</label>
+                        <input id="shop-product-blurb" placeholder="Cuenta compartida / perfil">
+                      </div>
+                      <div class="full-row">
+                        <label for="shop-product-otp-senders">Remitentes OTP (opcional)</label>
+                        <input id="shop-product-otp-senders" placeholder="netflix.com, disney.com">
+                        <p class="form-hint">Dominios del correo de verificación, separados por coma. Necesario para “Consultar código”.</p>
+                      </div>
+                      <div class="form-actions">
+                        <button id="shop-product-submit" type="submit">Agregar producto</button>
+                      </div>
+                    </form>                  </article>
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2>Precios del catálogo</h2>
+                      <input id="shop-product-search" class="search-input" type="search" placeholder="Buscar...">
+                    </div>
+                    <div id="shop-products-list" class="cards-list"></div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="shop-admin-pane" data-shop-tab="combos" hidden>
+                <div class="panel-stack">
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2 id="shop-combo-form-title">Agregar combo</h2>
+                      <button id="shop-combo-cancel" class="secondary compact" type="button" hidden>Cancelar</button>
+                    </div>
+                    <form id="shop-combo-form">
+                      <input id="shop-combo-edit-id" type="hidden" value="">
+                      <label for="shop-combo-label">Nombre del combo</label>
+                      <input id="shop-combo-label" required placeholder="Pack Streaming">
+                      <label for="shop-combo-key">Clave (opcional)</label>
+                      <input id="shop-combo-key" placeholder="pack-streaming">
+                      <label for="shop-combo-price">Precio combo COP</label>
+                      <input id="shop-combo-price" type="number" min="0" step="1000" required>
+                      <label for="shop-combo-blurb">Descripción</label>
+                      <input id="shop-combo-blurb" placeholder="Netflix + Disney + Max">
+                      <label for="shop-combo-active">Estado</label>
+                      <select id="shop-combo-active">
+                        <option value="1">Activo</option>
+                        <option value="0">Oculto</option>
+                      </select>
+                      <p class="form-hint">Marca los productos incluidos:</p>
+                      <div id="shop-combo-items" class="shop-combo-items"></div>
+                      <button id="shop-combo-submit" type="submit">Agregar combo</button>
+                    </form>
+                  </article>
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2>Combos</h2>
+                      <input id="shop-combo-search" class="search-input" type="search" placeholder="Buscar...">
+                    </div>
+                    <div id="shop-combos-list" class="cards-list"></div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="shop-admin-pane" data-shop-tab="discounts" hidden>
+                <div class="panel-stack">
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2 id="shop-discount-form-title">Agregar descuento</h2>
+                      <button id="shop-discount-cancel" class="secondary compact" type="button" hidden>Cancelar</button>
+                    </div>
+                    <form id="shop-discount-form" class="admin-form-grid">
+                      <input id="shop-discount-edit-id" type="hidden" value="">
+                      <div>
+                        <label for="shop-discount-code">Código</label>
+                        <input id="shop-discount-code" required placeholder="PROMO10">
+                      </div>
+                      <div>
+                        <label for="shop-discount-label">Nombre</label>
+                        <input id="shop-discount-label" required placeholder="10% de descuento">
+                      </div>
+                      <div>
+                        <label for="shop-discount-type">Tipo</label>
+                        <select id="shop-discount-type">
+                          <option value="percent">Porcentaje</option>
+                          <option value="fixed">Monto fijo (COP)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label for="shop-discount-value">Valor</label>
+                        <input id="shop-discount-value" type="number" min="1" step="1" required>
+                      </div>
+                      <div>
+                        <label for="shop-discount-expires">Vence (opcional)</label>
+                        <input id="shop-discount-expires" type="datetime-local">
+                      </div>
+                      <div>
+                        <label for="shop-discount-active">Estado</label>
+                        <select id="shop-discount-active">
+                          <option value="1">Activo</option>
+                          <option value="0">Inactivo</option>
+                        </select>
+                      </div>
+                      <div class="form-actions">
+                        <button id="shop-discount-submit" type="submit">Agregar descuento</button>
+                      </div>
+                    </form>
+                  </article>
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2>Cupones</h2>
+                      <input id="shop-discount-search" class="search-input" type="search" placeholder="Buscar...">
+                    </div>
+                    <div id="shop-discounts-list" class="cards-list"></div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="shop-admin-pane" data-shop-tab="stock" hidden>
+                <div class="panel-stack">
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2 id="shop-stock-form-title">Agregar cuenta en stock</h2>
+                      <button id="shop-stock-cancel" class="secondary compact" type="button" hidden>Cancelar</button>
+                    </div>
+                    <form id="shop-stock-form">
+                      <input id="shop-stock-edit-id" type="hidden" value="">
+                      <label for="shop-stock-product">Producto</label>
+                      <select id="shop-stock-product" required>
+                        <option value="">Selecciona producto</option>
+                      </select>
+                      <label for="shop-stock-login">Usuario / correo</label>
+                      <input id="shop-stock-login" required>
+                      <label for="shop-stock-password">Contraseña</label>
+                      <input id="shop-stock-password" type="password" placeholder="Obligatoria al crear">
+                      <label for="shop-stock-status">Estado</label>
+                      <select id="shop-stock-status">
+                        <option value="available">Disponible</option>
+                        <option value="reserved">Reservada</option>
+                        <option value="sold">Vendida</option>
+                      </select>
+                      <label for="shop-stock-notes">Notas</label>
+                      <input id="shop-stock-notes" placeholder="Perfil 1, PIN, etc.">
+                      <button id="shop-stock-submit" type="submit">Agregar cuenta</button>
+                    </form>
+                  </article>
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2>Inventario</h2>
+                      <input id="shop-stock-search" class="search-input" type="search" placeholder="Buscar...">
+                    </div>
+                    <div id="shop-stock-list" class="cards-list"></div>
+                  </article>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="/static/api.js"></script>
+    <script src="/static/admin.js?v=20260322"></script>
+  </body>
+</html>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tienda - Central Code</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body class="shop-page">
+    <header class="shop-topbar">
+      <a class="shop-back" href="/">← Consultar código</a>
+      <div class="shop-brand">
+        <p class="eyebrow">CENTRAL CODE</p>
+        <strong>Tienda</strong>
+      </div>
+      <button id="cart-open" class="shop-cart-trigger" type="button">
+        Carrito
+        <span id="cart-badge" class="cart-badge" hidden>0</span>
+      </button>
+    </header>
+
+    <main class="shop-page-layout">
+      <section class="shop-main">
+        <div class="shop-intro">
+          <h1>Elige tus cuentas</h1>
+          <p class="intro">Añade al carrito y finaliza por WhatsApp.</p>
+        </div>
+        <div class="shop-filters">
+          <div class="shop-filter-field">
+            <label for="shop-search">Buscar</label>
+            <input id="shop-search" type="search" placeholder="Netflix, Spotify, Canva…" autocomplete="off">
+          </div>
+          <div class="shop-filter-field">
+            <label for="shop-category">Categoría</label>
+            <select id="shop-category">
+              <option value="">Todas</option>
+            </select>
+          </div>
+        </div>
+        <div id="shop-catalog" class="shop-card-grid" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <div id="cart-drawer" class="cart-drawer" hidden>
+      <button id="cart-backdrop" class="cart-backdrop" type="button" aria-label="Cerrar carrito"></button>
+      <aside class="shop-cart drawer-panel" aria-label="Carrito">
+        <div class="cart-drawer-head">
+          <h2>Carrito</h2>
+          <button id="cart-close" class="secondary compact" type="button">Cerrar</button>
+        </div>
+        <div id="cart-items" class="cart-items"></div>
+        <p id="cart-empty" class="muted">Tu carrito está vacío.</p>
+        <div class="cart-footer">
+          <div class="cart-discount">
+            <label for="shop-discount-code">Cupón</label>
+            <div class="cart-discount-row">
+              <input id="shop-discount-code" type="text" placeholder="PROMO10" autocomplete="off">
+              <button id="shop-discount-apply" class="secondary compact" type="button">Aplicar</button>
+            </div>
+            <p id="shop-discount-status" class="form-hint"></p>
+          </div>
+          <p id="cart-savings" class="cart-savings" hidden></p>
+          <div class="cart-total-row">
+            <span>Total</span>
+            <strong id="cart-total">$0</strong>
+          </div>
+          <a id="checkout-whatsapp" class="whatsapp-button checkout-button" href="#" target="_blank" rel="noopener noreferrer">Comprar por WhatsApp</a>
+          <button id="clear-cart" class="secondary compact" type="button">Vaciar carrito</button>
+        </div>
+      </aside>
+    </div>
+
+    <script src="/static/api.js"></script>
+    <script src="/static/shop.js?v=20260322b"></script>
+  </body>
+</html>
