@@ -7,7 +7,16 @@ const cartItemsEl = document.querySelector("#cart-items");
 const cartEmpty = document.querySelector("#cart-empty");
 const cartTotalEl = document.querySelector("#cart-total");
 const cartBadge = document.querySelector("#cart-badge");
-const checkoutLink = document.querySelector("#checkout-whatsapp");
+const checkoutOpen = document.querySelector("#checkout-open");
+const checkoutModal = document.querySelector("#checkout-modal");
+const checkoutClose = document.querySelector("#checkout-close");
+const checkoutBackdrop = document.querySelector("#checkout-backdrop");
+const checkoutForm = document.querySelector("#checkout-form");
+const checkoutStatus = document.querySelector("#checkout-status");
+const payAmount = document.querySelector("#pay-amount");
+const payKey = document.querySelector("#pay-key");
+const receiptInput = document.querySelector("#payer-receipt");
+const receiptName = document.querySelector("#receipt-name");
 const clearCartBtn = document.querySelector("#clear-cart");
 const discountInput = document.querySelector("#shop-discount-code");
 const discountApply = document.querySelector("#shop-discount-apply");
@@ -45,6 +54,7 @@ const BRAND_TONES = {
 
 let catalog = [];
 let whatsappPhone = "";
+let brebKey = "";
 let messageTemplate = "Hola, quiero comprar:\n{items}\nTotal: {total}";
 let cart = loadCart();
 let searchQuery = "";
@@ -131,26 +141,28 @@ function addToCart(key) {
   openCart();
 }
 
-function buildWhatsAppUrl() {
-  const entries = cartEntries();
-  if (!entries.length || !whatsappPhone) return "#";
-  const { subtotal, savings, total } = cartTotals();
-  let items = entries
-    .map(({ product, qty }) => {
-      const kind = product.kind === "combo" ? " (combo)" : "";
-      return `- ${product.label}${kind} x${qty} — ${formatCop(product.price_cop * qty)}`;
-    })
-    .join("\n");
-  if (savings > 0 && appliedDiscount) {
-    items += `\nCupón ${appliedDiscount.code}: -${formatCop(savings)}`;
+function openCheckout() {
+  if (!cartEntries().length) return;
+  if (payAmount) payAmount.textContent = formatCop(cartTotals().total);
+  if (payKey) payKey.textContent = brebKey || "—";
+  if (checkoutStatus) checkoutStatus.textContent = "";
+  if (checkoutModal) {
+    checkoutModal.hidden = false;
+    document.body.classList.add("cart-open");
   }
-  const totalLine = savings > 0
-    ? `${formatCop(total)} (antes ${formatCop(subtotal)})`
-    : formatCop(total);
-  const message = messageTemplate
-    .replace("{items}", items)
-    .replace("{total}", totalLine);
-  return `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`;
+}
+
+function closeCheckout() {
+  if (checkoutModal) checkoutModal.hidden = true;
+  if (!cartDrawer || cartDrawer.hidden) document.body.classList.remove("cart-open");
+}
+
+async function copyText(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    /* El navegador puede bloquear el portapapeles. */
+  }
 }
 
 function filteredProducts() {
@@ -245,11 +257,7 @@ function renderCart() {
     cartSavingsEl.textContent = savings > 0 ? `Descuento: -${formatCop(savings)}` : "";
   }
   if (cartTotalEl) cartTotalEl.textContent = formatCop(total);
-  if (checkoutLink) {
-    checkoutLink.href = buildWhatsAppUrl();
-    checkoutLink.classList.toggle("disabled", entries.length === 0);
-    checkoutLink.setAttribute("aria-disabled", entries.length === 0 ? "true" : "false");
-  }
+  if (checkoutOpen) checkoutOpen.disabled = entries.length === 0;
 }
 
 function openCart() {
@@ -375,8 +383,61 @@ cartOpen?.addEventListener("click", openCart);
 cartClose?.addEventListener("click", closeCart);
 cartBackdrop?.addEventListener("click", closeCart);
 
-checkoutLink?.addEventListener("click", (event) => {
-  if (!cartEntries().length) event.preventDefault();
+checkoutOpen?.addEventListener("click", openCheckout);
+checkoutClose?.addEventListener("click", closeCheckout);
+checkoutBackdrop?.addEventListener("click", closeCheckout);
+document.querySelector("#copy-amount")?.addEventListener("click", () => {
+  copyText(String(cartTotals().total));
+});
+document.querySelector("#copy-key")?.addEventListener("click", () => {
+  copyText(brebKey);
+});
+receiptInput?.addEventListener("change", () => {
+  const file = receiptInput.files?.[0];
+  if (receiptName) receiptName.textContent = file ? file.name : "JPG, PNG o WEBP";
+});
+checkoutForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const entries = cartEntries();
+  if (!entries.length) return;
+  const file = receiptInput?.files?.[0];
+  if (!file) {
+    if (checkoutStatus) checkoutStatus.textContent = "Sube la imagen del comprobante.";
+    return;
+  }
+  const submit = document.querySelector("#checkout-submit");
+  if (submit) submit.disabled = true;
+  if (checkoutStatus) checkoutStatus.textContent = "Enviando comprobante...";
+  const body = new FormData();
+  body.set("payer_name", document.querySelector("#payer-name").value.trim());
+  body.set("whatsapp", document.querySelector("#payer-whatsapp").value.trim());
+  body.set("discount_code", appliedDiscount?.code || "");
+  body.set("items", JSON.stringify(entries.map(({ product, qty }) => ({
+    key: product.key,
+    label: product.label,
+    kind: product.kind || "product",
+    qty,
+  }))));
+  body.set("receipt", file);
+  try {
+    const response = await fetch("/api/shop/orders", { method: "POST", body, credentials: "same-origin" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail || "No se pudo crear el pedido.");
+    window.open(payload.whatsapp_url, "_blank", "noopener");
+    cart = {};
+    appliedDiscount = null;
+    if (discountInput) discountInput.value = "";
+    saveCart();
+    renderCart();
+    renderCatalog();
+    closeCheckout();
+    closeCart();
+    if (checkoutStatus) checkoutStatus.textContent = "";
+  } catch (error) {
+    if (checkoutStatus) checkoutStatus.textContent = error.message;
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 });
 
 apiRequest("/api/shop/catalog")
@@ -385,6 +446,7 @@ apiRequest("/api/shop/catalog")
     const combos = payload.combos || [];
     catalog = [...products, ...combos];
     whatsappPhone = payload.whatsapp?.phone || "";
+    brebKey = payload.breb_key || "";
     messageTemplate = payload.whatsapp?.message_template || messageTemplate;
     fillCategoryOptions();
     renderCatalog();

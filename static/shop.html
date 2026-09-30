@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=Fraunces:opsz,wght@9..144,560;9..144,640&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=20260929b">
+    <link rel="stylesheet" href="/static/style.css?v=20260930c">
   </head>
   <body class="shop-page">
     <header class="shop-topbar">
@@ -67,13 +67,62 @@
             <span>Total</span>
             <strong id="cart-total">$0</strong>
           </div>
-          <a id="checkout-whatsapp" class="whatsapp-button checkout-button" href="#" target="_blank" rel="noopener noreferrer">Comprar por WhatsApp</a>
+          <button id="checkout-open" class="whatsapp-button checkout-button" type="button">Pagar con Bre-B</button>
           <button id="clear-cart" class="secondary compact" type="button">Vaciar carrito</button>
         </div>
       </aside>
     </div>
 
+    <div id="checkout-modal" class="checkout-modal" hidden>
+      <button id="checkout-backdrop" class="cart-backdrop" type="button" aria-label="Cerrar pago"></button>
+      <section class="checkout-sheet" aria-label="Pago Bre-B">
+        <div class="cart-drawer-head">
+          <h2>Pagar</h2>
+          <button id="checkout-close" class="secondary compact" type="button">Cerrar</button>
+        </div>
+        <form id="checkout-form">
+          <article class="pay-step">
+            <h3>Paso 1 · Transfiere por Bre-B</h3>
+            <div class="pay-row">
+              <div>
+                <p>Monto exacto</p>
+                <strong id="pay-amount">$0</strong>
+              </div>
+              <button id="copy-amount" class="secondary compact" type="button">Copiar</button>
+            </div>
+            <div class="pay-row">
+              <div>
+                <p>Llave Bre-B</p>
+                <strong id="pay-key">—</strong>
+              </div>
+              <button id="copy-key" class="secondary compact" type="button">Copiar</button>
+            </div>
+            <ol>
+              <li>En tu banco entra a Transferir con llaves (Bre-B).</li>
+              <li>Pega la llave y el monto exacto.</li>
+              <li>Confirma y guarda el pantallazo.</li>
+            </ol>
+          </article>
+          <article class="pay-step pay-step-upload">
+            <h3>Paso 2 · Sube tu comprobante</h3>
+            <p class="intro">Pon el nombre del dueño de la cuenta y sube el pantallazo. Te respondemos por WhatsApp.</p>
+            <label for="payer-name">Titular de la cuenta desde donde pagaste</label>
+            <input id="payer-name" name="payer_name" required minlength="3" maxlength="80" placeholder="Ej. Juan Pérez" autocomplete="name">
+            <label for="payer-whatsapp">Tu WhatsApp</label>
+            <input id="payer-whatsapp" name="whatsapp" required inputmode="tel" minlength="10" maxlength="15" placeholder="3001234567" autocomplete="tel">
+            <label class="receipt-drop" for="payer-receipt">
+              <span>Toca para subir el comprobante</span>
+              <small id="receipt-name">JPG, PNG o WEBP</small>
+            </label>
+            <input id="payer-receipt" name="receipt" type="file" accept="image/jpeg,image/png,image/webp" required hidden>
+            <p id="checkout-status" class="form-hint"></p>
+            <button id="checkout-submit" type="submit">Validar comprobante</button>
+          </article>
+        </form>
+      </section>
+    </div>
+
     <script src="/static/api.js"></script>
-    <script src="/static/shop.js?v=20260322b"></script>
+    <script src="/static/shop.js?v=20260930c"></script>
   </body>
 </html>

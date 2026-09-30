@@ -766,6 +766,26 @@ def update_account_expiration(path: str, account_id: int, expires_at: str) -> No
             raise ValueError("La cuenta no existe.")
 
 
+def get_or_create_client(path: str, name: str, phone: str) -> int:
+    digits = digits_only(phone)
+    if len(digits) < 7:
+        raise ValueError("El celular debe tener al menos 7 dígitos.")
+    normalized = normalize_phone(phone)
+    with sqlite3.connect(path) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute("SELECT id, phone FROM clients").fetchall()
+        for row in rows:
+            stored = digits_only(row["phone"])
+            if stored.endswith(digits[-10:]) or digits.endswith(stored[-10:]):
+                return int(row["id"])
+        cursor = connection.execute(
+            "INSERT INTO clients (name, phone, created_at) VALUES (?, ?, ?)",
+            (name.strip(), normalized, datetime.now(UTC).isoformat()),
+        )
+        connection.commit()
+        return int(cursor.lastrowid)
+
+
 def create_client(path: str, name: str, phone: str) -> int:
     with sqlite3.connect(path) as connection:
         cursor = connection.execute(

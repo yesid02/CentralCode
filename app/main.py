@@ -1,13 +1,15 @@
+import html
 import imaplib
+import json
 import logging
 import sqlite3
 from urllib.parse import quote
 
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -48,6 +50,17 @@ from app.imap_client import (
     find_recent_household_link,
 )
 from app.netflix_link import resolve_household_code
+from app.orders import (
+    admin_whatsapp_text,
+    approve_order,
+    create_order,
+    credentials_message,
+    get_order,
+    load_approved_accounts,
+    receipt_file,
+    reject_order,
+    save_receipt,
+)
 from app.platforms import get_platform, list_platforms
 from app.security import (
     RateLimiter,
@@ -62,6 +75,7 @@ from app.security import (
     set_auth_cookies,
     verify_admin_session,
 )
+from app.shop import format_cop
 from app.shop_store import (
     apply_discount_amount,
     create_shop_combo,
@@ -626,6 +640,7 @@ def shop_catalog() -> dict:
             "phone": number,
             "message_template": settings.whatsapp_shop_message,
         },
+        "breb_key": digits_only(settings.breb_key),
     }
 
 
@@ -645,6 +660,163 @@ def shop_discount_check(payload: ShopDiscountCheckRequest) -> dict:
         "savings": savings,
         "total": total,
     }
+
+
+def _public_base(request: Request) -> str:
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme).split(",")[0].strip()
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+    return f"{proto}://{host}".rstrip("/")
+
+
+def _wa_number(value: str) -> str:
+    digits = digits_only(value)
+    if len(digits) == 10 and digits.startswith("3"):
+        return f"57{digits}"
+    return digits
+
+
+@app.post("/api/shop/orders")
+async def shop_create_order(
+    request: Request,
+    payer_name: str = Form(min_length=3, max_length=80),
+    whatsapp: str = Form(min_length=7, max_length=20),
+    items: str = Form(min_length=2, max_length=8000),
+    discount_code: str = Form(default="", max_length=40),
+    receipt: UploadFile = File(...),
+) -> dict:
+    limiter.hit(f"order:{client_ip(request)}", 8, 300)
+    try:
+        parsed_items = json.loads(items)
+        if not isinstance(parsed_items, list) or not parsed_items:
+            raise ValueError("El carrito está vacío.")
+        content = await receipt.read()
+        receipt_path = save_receipt(content, receipt.content_type or "")
+        order = create_order(
+            settings.database_path,
+            payer_name=payer_name,
+            whatsapp=whatsapp,
+            items=parsed_items,
+            discount_code=discount_code,
+            receipt_path=receipt_path,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except json.JSONDecodeError as error:
+        raise HTTPException(status_code=400, detail="El carrito no es válido.") from error
+    stored = get_order(settings.database_path, order["token"])
+    base = _public_base(request)
+    review_url = f"{base}/pedido/{order['token']}"
+    text = admin_whatsapp_text(stored, review_url, f"{review_url}/comprobante")
+    phone = _wa_number(settings.whatsapp_bot_number)
+    return {
+        "order_id": order["id"],
+        "whatsapp_url": f"https://wa.me/{phone}?text={quote(text)}",
+    }
+
+
+@app.get("/pedido/{token}/comprobante")
+def shop_order_receipt(token: str) -> FileResponse:
+    found = receipt_file(settings.database_path, token)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Comprobante no encontrado.")
+    path, media = found
+    return FileResponse(path, media_type=media)
+
+
+@app.get("/pedido/{token}", response_class=HTMLResponse)
+def shop_order_review(token: str) -> HTMLResponse:
+    order = get_order(settings.database_path, token)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    return HTMLResponse(_order_review_html(order))
+
+
+@app.post("/pedido/{token}/autorizar", response_class=HTMLResponse)
+def shop_order_approve(token: str) -> HTMLResponse:
+    try:
+        result = approve_order(settings.database_path, token)
+    except ValueError as error:
+        order = get_order(settings.database_path, token)
+        if order is None:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        return HTMLResponse(_order_review_html(order, notice=str(error)))
+    message = credentials_message(result["order"]["payer_name"], result["accounts"])
+    customer = _wa_number(result["order"]["whatsapp"])
+    url = f"https://wa.me/{customer}?text={quote(message)}"
+    order = get_order(settings.database_path, token)
+    return HTMLResponse(_order_review_html(order, customer_url=url, auto_open=True))
+
+
+@app.post("/pedido/{token}/rechazar", response_class=HTMLResponse)
+def shop_order_reject(token: str) -> HTMLResponse:
+    try:
+        reject_order(settings.database_path, token)
+    except ValueError as error:
+        order = get_order(settings.database_path, token)
+        if order is None:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        return HTMLResponse(_order_review_html(order, notice=str(error)))
+    order = get_order(settings.database_path, token)
+    return HTMLResponse(_order_review_html(order, notice="Pedido rechazado. No se entregaron cuentas."))
+
+
+def _order_review_html(order: dict, *, notice: str = "", customer_url: str = "", auto_open: bool = False) -> str:
+    lines = "".join(
+        f"<li>{html.escape(str(item.get('label') or item.get('key')))} × {int(item.get('qty') or 0)}</li>"
+        for item in order["items"]
+    )
+    status = order["status"]
+    actions = ""
+    if status == "pending":
+        actions = f"""
+        <p class="ask">¿Autorizas este pago?</p>
+        <form method="post" action="/pedido/{html.escape(order['token'])}/autorizar">
+          <button class="yes" type="submit">Autorizar</button>
+        </form>
+        <form method="post" action="/pedido/{html.escape(order['token'])}/rechazar">
+          <button class="no" type="submit">Rechazar</button>
+        </form>
+        """
+    elif status == "approved" and not customer_url:
+        accounts = load_approved_accounts(settings.database_path, order)
+        if accounts:
+            message = credentials_message(order["payer_name"], accounts)
+            customer_url = f"https://wa.me/{_wa_number(order['whatsapp'])}?text={quote(message)}"
+    send = ""
+    if customer_url:
+        send = (
+            f'<a class="yes link" href="{html.escape(customer_url)}">Enviar cuentas por WhatsApp</a>'
+            "<p class=\"hint\">Se abre el chat del cliente con correo y contraseña listos. Pulsa enviar.</p>"
+        )
+    note = f"<p class=\"notice\">{html.escape(notice)}</p>" if notice else ""
+    opener = (
+        f'<meta http-equiv="refresh" content="0;url={html.escape(customer_url)}">'
+        if auto_open and customer_url
+        else ""
+    )
+    return f"""<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+{opener}
+<title>Pedido #{int(order['id'])}</title>
+<style>
+  body {{ font-family: "Segoe UI", sans-serif; background:#f6f3ec; color:#1c1915; margin:0; padding:1.2rem; }}
+  main {{ max-width:28rem; margin:0 auto; background:#fffdf9; border:1px solid #e3dacd; border-radius:1.1rem; padding:1.2rem; }}
+  img {{ width:100%; border-radius:.8rem; margin-top:.6rem; }}
+  .yes, .no {{ width:100%; min-height:3rem; border:0; border-radius:.8rem; font-weight:800; margin-top:.6rem; cursor:pointer; }}
+  .yes {{ background:#163832; color:white; }}
+  .no {{ background:#fff; color:#9b1c1c; border:1px solid #e7b4b4; }}
+  a.link {{ display:block; text-align:center; text-decoration:none; padding:.85rem; }}
+  .notice {{ background:#fff6e8; border-radius:.7rem; padding:.7rem; }}
+  .ask {{ font-weight:800; }}
+</style></head><body><main>
+  <p>Pedido #{int(order['id'])} · {html.escape(status)}</p>
+  <h1>{html.escape(order['payer_name'])}</h1>
+  <p>WhatsApp {html.escape(order['whatsapp'])}<br>Total {html.escape(format_cop(int(order['total'])))}</p>
+  <ul>{lines}</ul>
+  <img src="/pedido/{html.escape(order['token'])}/comprobante" alt="Comprobante de pago">
+  {note}{actions}{send}
+</main></body></html>"""
 
 
 @app.post("/api/admin/shop/products")

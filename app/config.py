@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     trusted_hosts: str = "*"
     openapi_enabled: bool = False
     whatsapp_bot_number: str = "573147720880"
+    breb_key: str = "1003966611"
     whatsapp_renewal_message: str = (
         "Hola, necesito renovar mi cuenta de {platform}. "
         "Mi celular es {identifier}."
