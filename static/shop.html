@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=Fraunces:opsz,wght@9..144,560;9..144,640&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=20260930c">
+    <link rel="stylesheet" href="/static/style.css?v=20260930e">
   </head>
   <body class="shop-page">
     <header class="shop-topbar">
@@ -67,7 +67,7 @@
             <span>Total</span>
             <strong id="cart-total">$0</strong>
           </div>
-          <button id="checkout-open" class="whatsapp-button checkout-button" type="button">Pagar con Bre-B</button>
+          <button id="checkout-open" class="whatsapp-button checkout-button" type="button">Pagar</button>
           <button id="clear-cart" class="secondary compact" type="button">Vaciar carrito</button>
         </div>
       </aside>
@@ -75,14 +75,14 @@
 
     <div id="checkout-modal" class="checkout-modal" hidden>
       <button id="checkout-backdrop" class="cart-backdrop" type="button" aria-label="Cerrar pago"></button>
-      <section class="checkout-sheet" aria-label="Pago Bre-B">
+      <section class="checkout-sheet" aria-label="Pago">
         <div class="cart-drawer-head">
           <h2>Pagar</h2>
           <button id="checkout-close" class="secondary compact" type="button">Cerrar</button>
         </div>
         <form id="checkout-form">
           <article class="pay-step">
-            <h3>Paso 1 · Transfiere por Bre-B</h3>
+            <h3>Paso 1 · Transfiere el monto exacto</h3>
             <div class="pay-row">
               <div>
                 <p>Monto exacto</p>
@@ -90,18 +90,7 @@
               </div>
               <button id="copy-amount" class="secondary compact" type="button">Copiar</button>
             </div>
-            <div class="pay-row">
-              <div>
-                <p>Llave Bre-B</p>
-                <strong id="pay-key">—</strong>
-              </div>
-              <button id="copy-key" class="secondary compact" type="button">Copiar</button>
-            </div>
-            <ol>
-              <li>En tu banco entra a Transferir con llaves (Bre-B).</li>
-              <li>Pega la llave y el monto exacto.</li>
-              <li>Confirma y guarda el pantallazo.</li>
-            </ol>
+            <div id="pay-methods" class="pay-methods"></div>
           </article>
           <article class="pay-step pay-step-upload">
             <h3>Paso 2 · Sube tu comprobante</h3>
@@ -123,6 +112,6 @@
     </div>
 
     <script src="/static/api.js"></script>
-    <script src="/static/shop.js?v=20260930c"></script>
+    <script src="/static/shop.js?v=20260930f"></script>
   </body>
 </html>

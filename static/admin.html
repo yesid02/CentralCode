@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght@9..144,560;9..144,640&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=20260929b">
+    <link rel="stylesheet" href="/static/style.css?v=20260930e">
   </head>
   <body class="admin-page">
     <main class="admin-shell">
@@ -61,6 +61,7 @@
               <span class="tab-label">Tienda</span>
               <small>Precios y combos</small>
             </button>
+            <a class="nav-public" href="/">Consulta</a>
           </nav>
 
           <div class="sidebar-footer">
@@ -259,6 +260,7 @@
                 <button type="button" class="shop-tab active" data-shop-tab="products">Productos</button>
                 <button type="button" class="shop-tab" data-shop-tab="combos">Combos</button>
                 <button type="button" class="shop-tab" data-shop-tab="discounts">Descuentos</button>
+                <button type="button" class="shop-tab" data-shop-tab="payments">Pagos</button>
                 <button type="button" class="shop-tab" data-shop-tab="stock">Cuentas</button>
               </div>
 
@@ -409,6 +411,54 @@
                 </div>
               </div>
 
+              <div class="shop-admin-pane" data-shop-tab="payments" hidden>
+                <div class="panel-stack">
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2 id="shop-payment-form-title">Agregar forma de pago</h2>
+                      <button id="shop-payment-cancel" class="secondary compact" type="button" hidden>Cancelar</button>
+                    </div>
+                    <form id="shop-payment-form" class="admin-form-grid">
+                      <input id="shop-payment-edit-id" type="hidden" value="">
+                      <div>
+                        <label for="shop-payment-label">Nombre</label>
+                        <input id="shop-payment-label" required maxlength="60" placeholder="Bre-B, Nequi, Bancolombia">
+                      </div>
+                      <div>
+                        <label for="shop-payment-detail">Qué copia el cliente</label>
+                        <input id="shop-payment-detail" maxlength="40" placeholder="Llave Bre-B">
+                      </div>
+                      <div class="full-row">
+                        <label for="shop-payment-key">Número o llave</label>
+                        <input id="shop-payment-key" required maxlength="80">
+                      </div>
+                      <div class="full-row">
+                        <label for="shop-payment-instructions">Instrucciones</label>
+                        <input id="shop-payment-instructions" maxlength="280" placeholder="Dónde pagar y qué poner.">
+                      </div>
+                      <div>
+                        <label for="shop-payment-active">Estado</label>
+                        <select id="shop-payment-active">
+                          <option value="1">Activa</option>
+                          <option value="0">Oculta</option>
+                        </select>
+                      </div>
+                      <div class="form-actions">
+                        <button id="shop-payment-submit" type="submit">Agregar forma de pago</button>
+                      </div>
+                    </form>
+                    <p class="form-hint">Las formas activas se muestran en la tienda cuando el cliente va a pagar.</p>
+                  </article>
+                  <article class="card panel-card">
+                    <div class="card-head">
+                      <h2>Formas de pago</h2>
+                      <input id="shop-payment-search" class="search-input" type="search" placeholder="Buscar...">
+                    </div>
+                    <div id="shop-payments-list" class="cards-list"></div>
+                  </article>
+                </div>
+              </div>
+
               <div class="shop-admin-pane" data-shop-tab="stock" hidden>
                 <div class="panel-stack">
                   <article class="card panel-card">
@@ -452,6 +502,6 @@
       </section>
     </main>
     <script src="/static/api.js"></script>
-    <script src="/static/admin.js?v=20260322"></script>
+    <script src="/static/admin.js?v=20260930f"></script>
   </body>
 </html>

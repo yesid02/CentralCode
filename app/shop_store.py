@@ -95,6 +95,25 @@ def ensure_shop_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    stock_columns = {row[1] for row in connection.execute("PRAGMA table_info(shop_stock)").fetchall()}
+    if "sale_count" not in stock_columns:
+        connection.execute(
+            "ALTER TABLE shop_stock ADD COLUMN sale_count INTEGER NOT NULL DEFAULT 0"
+        )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS shop_payment_methods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            detail_label TEXT NOT NULL DEFAULT 'Dato',
+            key_value TEXT NOT NULL,
+            instructions TEXT NOT NULL DEFAULT '',
+            active INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
 
 
 def seed_shop_products(path: str) -> None:
@@ -196,7 +215,7 @@ def list_shop_products_public(path: str) -> list[dict]:
             "blurb": item["blurb"],
             "category": item["category"],
             "kind": "product",
-            "stock_available": item.get("stock_available") or 0,
+            "stock_available": 1 if (item.get("stock_available") or 0) > 0 else 0,
         }
         for item in list_shop_products_admin(path)
         if item["active"]
@@ -632,6 +651,17 @@ def list_shop_stock(path: str) -> list[dict]:
             ORDER BY s.id DESC
             """
         ).fetchall()
+    grouped: dict[int, list[sqlite3.Row]] = {}
+    for row in rows:
+        if row["status"] != "available":
+            continue
+        grouped.setdefault(int(row["product_id"]), []).append(row)
+    on_duty: set[int] = set()
+    for group in grouped.values():
+        ordered = sorted(group, key=lambda item: int(item["id"]))
+        total = sum(int(item["sale_count"] or 0) for item in ordered)
+        current = ordered[(total // 2) % len(ordered)]
+        on_duty.add(int(current["id"]))
     return [
         {
             "id": row["id"],
@@ -642,6 +672,8 @@ def list_shop_stock(path: str) -> list[dict]:
             "password": _open(row["password"]),
             "notes": row["notes"] or "",
             "status": row["status"],
+            "sale_count": int(row["sale_count"] or 0),
+            "on_duty": int(row["id"]) in on_duty,
             "created_at": row["created_at"],
         }
         for row in rows
@@ -744,21 +776,144 @@ def delete_shop_stock(path: str, stock_id: int) -> None:
             raise ValueError("Cuenta de stock no encontrada.")
 
 
+def list_payment_methods(path: str, *, active_only: bool = False) -> list[dict]:
+    with sqlite3.connect(path) as connection:
+        connection.row_factory = sqlite3.Row
+        ensure_shop_schema(connection)
+        query = "SELECT * FROM shop_payment_methods"
+        if active_only:
+            query += " WHERE active = 1"
+        query += " ORDER BY sort_order ASC, id ASC"
+        rows = connection.execute(query).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "label": row["label"],
+            "detail_label": row["detail_label"] or "Dato",
+            "key_value": row["key_value"],
+            "instructions": row["instructions"] or "",
+            "active": bool(row["active"]),
+            "sort_order": int(row["sort_order"] or 0),
+        }
+        for row in rows
+    ]
+
+
+def create_payment_method(
+    path: str,
+    *,
+    label: str,
+    key_value: str,
+    detail_label: str = "Llave",
+    instructions: str = "",
+    active: bool = True,
+) -> int:
+    if not label.strip() or not key_value.strip():
+        raise ValueError("El nombre y el dato de pago son obligatorios.")
+    with sqlite3.connect(path) as connection:
+        ensure_shop_schema(connection)
+        cursor = connection.execute(
+            """
+            INSERT INTO shop_payment_methods
+                (label, detail_label, key_value, instructions, active, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, 0, ?)
+            """,
+            (
+                label.strip(),
+                (detail_label or "Dato").strip()[:40],
+                key_value.strip(),
+                instructions.strip(),
+                1 if active else 0,
+                _now(),
+            ),
+        )
+        connection.commit()
+        return int(cursor.lastrowid)
+
+
+def update_payment_method(
+    path: str,
+    method_id: int,
+    *,
+    label: str,
+    key_value: str,
+    detail_label: str = "Llave",
+    instructions: str = "",
+    active: bool = True,
+) -> None:
+    if not label.strip() or not key_value.strip():
+        raise ValueError("El nombre y el dato de pago son obligatorios.")
+    with sqlite3.connect(path) as connection:
+        ensure_shop_schema(connection)
+        cursor = connection.execute(
+            """
+            UPDATE shop_payment_methods
+            SET label = ?, detail_label = ?, key_value = ?, instructions = ?, active = ?
+            WHERE id = ?
+            """,
+            (
+                label.strip(),
+                (detail_label or "Dato").strip()[:40],
+                key_value.strip(),
+                instructions.strip(),
+                1 if active else 0,
+                method_id,
+            ),
+        )
+        connection.commit()
+        if cursor.rowcount == 0:
+            raise ValueError("La forma de pago no existe.")
+
+
+def delete_payment_method(path: str, method_id: int) -> None:
+    with sqlite3.connect(path) as connection:
+        ensure_shop_schema(connection)
+        cursor = connection.execute("DELETE FROM shop_payment_methods WHERE id = ?", (method_id,))
+        connection.commit()
+        if cursor.rowcount == 0:
+            raise ValueError("La forma de pago no existe.")
+
+
+def seed_default_payment_method(path: str, breb_key: str) -> None:
+    with sqlite3.connect(path) as connection:
+        ensure_shop_schema(connection)
+        count = connection.execute("SELECT COUNT(*) FROM shop_payment_methods").fetchone()[0]
+        if count:
+            return
+        key = (breb_key or "").strip() or "1003966611"
+        connection.execute(
+            """
+            INSERT INTO shop_payment_methods
+                (label, detail_label, key_value, instructions, active, sort_order, created_at)
+            VALUES ('Bre-B', 'Llave Bre-B', ?, ?, 1, 0, ?)
+            """,
+            (
+                key,
+                "En tu banco entra a Transferir con llaves (Bre-B), pega la llave y el monto exacto.",
+                _now(),
+            ),
+        )
+        connection.commit()
+
+
 def shop_admin_bundle(path: str) -> dict:
     products = list_shop_products_admin(path)
     combos = list_shop_combos(path)
     discounts = list_shop_discounts(path)
     stock = list_shop_stock(path)
+    payments = list_payment_methods(path)
     return {
         "products": products,
         "combos": combos,
         "discounts": discounts,
         "stock": stock,
+        "payments": payments,
         "summary": {
             "products": len(products),
             "active_products": sum(1 for p in products if p["active"]),
             "combos": len(combos),
             "discounts": len(discounts),
+            "payments": len(payments),
             "stock_available": sum(1 for s in stock if s["status"] == "available"),
             "stock_total": len(stock),
         },

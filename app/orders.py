@@ -49,6 +49,9 @@ def ensure_orders_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(shop_orders)").fetchall()}
+    if "payment_method" not in columns:
+        connection.execute("ALTER TABLE shop_orders ADD COLUMN payment_method TEXT")
 
 
 def save_receipt(content: bytes, content_type: str) -> str:
@@ -141,6 +144,7 @@ def create_order(
     items: list[dict],
     discount_code: str,
     receipt_path: str,
+    payment_method: str = "",
 ) -> dict:
     name = payer_name.strip()
     phone_digits = digits_only(whatsapp)
@@ -161,7 +165,7 @@ def create_order(
         needed: dict[str, int] = {}
         for unit in units:
             needed[unit["key"]] = needed.get(unit["key"], 0) + 1
-        for key, count in needed.items():
+        for key in needed:
             available = connection.execute(
                 """
                 SELECT COUNT(*) FROM shop_stock s
@@ -170,16 +174,16 @@ def create_order(
                 """,
                 (key,),
             ).fetchone()[0]
-            if available < count:
+            if available < 1:
                 label = next(unit["label"] for unit in units if unit["key"] == key)
-                raise ValueError(f"No hay suficientes cuentas disponibles de {label}.")
+                raise ValueError(f"No hay cuentas disponibles de {label}.")
         token = secrets.token_urlsafe(24)
         cursor = connection.execute(
             """
             INSERT INTO shop_orders (
                 token, payer_name, whatsapp, items_json, subtotal, savings, total,
-                discount_code, receipt_path, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                discount_code, receipt_path, payment_method, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
             """,
             (
                 token,
@@ -191,6 +195,7 @@ def create_order(
                 total,
                 discount["code"] if discount else None,
                 receipt_path,
+                payment_method.strip() or None,
                 datetime.now(UTC).isoformat(),
             ),
         )
@@ -234,8 +239,10 @@ def _summary_lines(order: dict) -> str:
 
 
 def admin_whatsapp_text(order: dict, review_url: str, receipt_url: str) -> str:
+    method = order.get("payment_method") or "No indicada"
     return (
-        f"Nuevo pago Bre-B · pedido #{order['id']}\n"
+        f"Nuevo pago · pedido #{order['id']}\n"
+        f"Forma de pago: {method}\n"
         f"Titular: {order['payer_name']}\n"
         f"WhatsApp: {order['whatsapp']}\n"
         f"Total: {format_cop(int(order['total']))}\n"
@@ -260,22 +267,27 @@ def _claim_stock(path: str, token: str) -> tuple[dict, list[dict]]:
         items = json.loads(row["items_json"] or "[]")
         units = _expand_units(path, items)
         claimed: list[dict] = []
+        seen_keys: set[str] = set()
         for unit in units:
-            stock = connection.execute(
+            if unit["key"] in seen_keys:
+                continue
+            seen_keys.add(unit["key"])
+            pool = connection.execute(
                 """
-                SELECT s.id, s.login, s.password, p.key, p.label
+                SELECT s.id, s.login, s.password, s.sale_count, p.key, p.label
                 FROM shop_stock s
                 JOIN shop_products p ON p.id = s.product_id
                 WHERE p.key = ? AND s.status = 'available'
                 ORDER BY s.id ASC
-                LIMIT 1
                 """,
                 (unit["key"],),
-            ).fetchone()
-            if stock is None:
+            ).fetchall()
+            if not pool:
                 raise ValueError(f"Ya no hay stock de {unit['label']}.")
+            total_sales = sum(int(item["sale_count"] or 0) for item in pool)
+            stock = pool[(total_sales // 2) % len(pool)]
             connection.execute(
-                "UPDATE shop_stock SET status = 'sold' WHERE id = ?",
+                "UPDATE shop_stock SET sale_count = COALESCE(sale_count, 0) + 1 WHERE id = ?",
                 (stock["id"],),
             )
             claimed.append(
@@ -357,7 +369,11 @@ def approve_order(path: str, token: str) -> dict:
     except Exception:
         with sqlite3.connect(path) as connection:
             connection.executemany(
-                "UPDATE shop_stock SET status = 'available' WHERE id = ?",
+                """
+                UPDATE shop_stock
+                SET sale_count = CASE WHEN sale_count > 0 THEN sale_count - 1 ELSE 0 END
+                WHERE id = ?
+                """,
                 [(stock_id,) for stock_id in stock_ids],
             )
             connection.execute(

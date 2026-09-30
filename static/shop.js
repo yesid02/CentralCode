@@ -14,7 +14,7 @@ const checkoutBackdrop = document.querySelector("#checkout-backdrop");
 const checkoutForm = document.querySelector("#checkout-form");
 const checkoutStatus = document.querySelector("#checkout-status");
 const payAmount = document.querySelector("#pay-amount");
-const payKey = document.querySelector("#pay-key");
+const payMethodsEl = document.querySelector("#pay-methods");
 const receiptInput = document.querySelector("#payer-receipt");
 const receiptName = document.querySelector("#receipt-name");
 const clearCartBtn = document.querySelector("#clear-cart");
@@ -54,7 +54,7 @@ const BRAND_TONES = {
 
 let catalog = [];
 let whatsappPhone = "";
-let brebKey = "";
+let paymentMethods = [];
 let messageTemplate = "Hola, quiero comprar:\n{items}\nTotal: {total}";
 let cart = loadCart();
 let searchQuery = "";
@@ -65,7 +65,13 @@ function loadCart() {
   try {
     const raw = localStorage.getItem(CART_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    const cart = {};
+    for (const [key, qty] of Object.entries(parsed)) {
+      const next = Math.max(0, Math.min(1, Number(qty) || 0));
+      if (next) cart[key] = next;
+    }
+    return cart;
   } catch {
     return {};
   }
@@ -128,7 +134,7 @@ function brandInitials(label) {
 }
 
 function setQty(key, qty) {
-  const next = Math.max(0, Math.min(20, Number(qty) || 0));
+  const next = Math.max(0, Math.min(1, Number(qty) || 0));
   if (next <= 0) delete cart[key];
   else cart[key] = next;
   saveCart();
@@ -141,10 +147,38 @@ function addToCart(key) {
   openCart();
 }
 
+function renderPayMethods() {
+  if (!payMethodsEl) return;
+  if (!paymentMethods.length) {
+    payMethodsEl.innerHTML = `<p class="pay-empty">Todavía no hay formas de pago activas. Vuelve más tarde.</p>`;
+    return;
+  }
+  payMethodsEl.innerHTML = paymentMethods.map((method, index) => `
+    <label class="pay-method${index === 0 ? " is-selected" : ""}">
+      <span class="pay-method-pick">
+        <input type="radio" name="payment-method" value="${escapeHtml(method.label)}" ${index === 0 ? "checked" : ""}>
+        Pagué con ${escapeHtml(method.label)}
+      </span>
+      <div class="pay-row">
+        <div>
+          <p>${escapeHtml(method.detail_label || "Dato")}</p>
+          <strong>${escapeHtml(method.key_value)}</strong>
+        </div>
+        <button class="secondary compact copy-pay-key" type="button" data-copy="${escapeHtml(method.key_value)}">Copiar</button>
+      </div>
+      ${method.instructions ? `<p>${escapeHtml(method.instructions)}</p>` : ""}
+    </label>
+  `).join("");
+}
+
+function selectedPaymentMethod() {
+  return document.querySelector('input[name="payment-method"]:checked')?.value || "";
+}
+
 function openCheckout() {
   if (!cartEntries().length) return;
   if (payAmount) payAmount.textContent = formatCop(cartTotals().total);
-  if (payKey) payKey.textContent = brebKey || "—";
+  renderPayMethods();
   if (checkoutStatus) checkoutStatus.textContent = "";
   if (checkoutModal) {
     checkoutModal.hidden = false;
@@ -199,7 +233,7 @@ function renderCatalog() {
     const stockLabel = product.kind === "combo"
       ? "combo"
       : (product.stock_available || 0) > 0
-        ? "en stock"
+        ? "disponible"
         : "consultar";
     const title = product.blurb
       ? `CUENTA ${product.label}`.toUpperCase()
@@ -389,8 +423,17 @@ checkoutBackdrop?.addEventListener("click", closeCheckout);
 document.querySelector("#copy-amount")?.addEventListener("click", () => {
   copyText(String(cartTotals().total));
 });
-document.querySelector("#copy-key")?.addEventListener("click", () => {
-  copyText(brebKey);
+payMethodsEl?.addEventListener("click", (event) => {
+  const button = event.target.closest(".copy-pay-key");
+  if (!button) return;
+  event.preventDefault();
+  copyText(button.dataset.copy || "");
+});
+payMethodsEl?.addEventListener("change", (event) => {
+  if (event.target.name !== "payment-method") return;
+  payMethodsEl.querySelectorAll(".pay-method").forEach((card) => {
+    card.classList.toggle("is-selected", card.contains(event.target));
+  });
 });
 receiptInput?.addEventListener("change", () => {
   const file = receiptInput.files?.[0];
@@ -405,12 +448,17 @@ checkoutForm?.addEventListener("submit", async (event) => {
     if (checkoutStatus) checkoutStatus.textContent = "Sube la imagen del comprobante.";
     return;
   }
+  if (paymentMethods.length && !selectedPaymentMethod()) {
+    if (checkoutStatus) checkoutStatus.textContent = "Elige la forma de pago que usaste.";
+    return;
+  }
   const submit = document.querySelector("#checkout-submit");
   if (submit) submit.disabled = true;
   if (checkoutStatus) checkoutStatus.textContent = "Enviando comprobante...";
   const body = new FormData();
   body.set("payer_name", document.querySelector("#payer-name").value.trim());
   body.set("whatsapp", document.querySelector("#payer-whatsapp").value.trim());
+  body.set("payment_method", selectedPaymentMethod());
   body.set("discount_code", appliedDiscount?.code || "");
   body.set("items", JSON.stringify(entries.map(({ product, qty }) => ({
     key: product.key,
@@ -446,7 +494,7 @@ apiRequest("/api/shop/catalog")
     const combos = payload.combos || [];
     catalog = [...products, ...combos];
     whatsappPhone = payload.whatsapp?.phone || "";
-    brebKey = payload.breb_key || "";
+    paymentMethods = payload.payment_methods || [];
     messageTemplate = payload.whatsapp?.message_template || messageTemplate;
     fillCategoryOptions();
     renderCatalog();

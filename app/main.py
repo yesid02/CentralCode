@@ -86,15 +86,20 @@ from app.shop_store import (
     delete_shop_discount,
     delete_shop_product,
     delete_shop_stock,
+    delete_payment_method,
+    list_payment_methods,
     list_shop_combos,
     list_shop_products_public,
     resolve_shop_discount,
     seed_shop_products,
+    seed_default_payment_method,
     shop_admin_bundle,
+    update_payment_method,
     update_shop_combo,
     update_shop_discount,
     update_shop_product,
     update_shop_stock,
+    create_payment_method,
 )
 
 logger = logging.getLogger("centralcode.security")
@@ -222,6 +227,14 @@ class ShopStockRequest(BaseModel):
     status: str = Field(default="available", pattern="^(available|sold|reserved)$")
 
 
+class ShopPaymentRequest(BaseModel):
+    label: str = Field(min_length=1, max_length=60)
+    detail_label: str = Field(default="Llave", max_length=40)
+    key_value: str = Field(min_length=1, max_length=80)
+    instructions: str = Field(default="", max_length=280)
+    active: bool = True
+
+
 class ShopDiscountCheckRequest(BaseModel):
     code: str = Field(min_length=1, max_length=40)
     subtotal: int = Field(default=0, ge=0, le=50_000_000)
@@ -239,6 +252,7 @@ def startup() -> None:
     configure_encryption(fernet)
     init_database(settings.database_path)
     seed_shop_products(settings.database_path)
+    seed_default_payment_method(settings.database_path, settings.breb_key)
     migrated = migrate_plaintext_secrets(settings.database_path)
     if migrated:
         logger.warning("Se cifraron %s credenciales que estaban en texto plano.", migrated)
@@ -641,6 +655,16 @@ def shop_catalog() -> dict:
             "message_template": settings.whatsapp_shop_message,
         },
         "breb_key": digits_only(settings.breb_key),
+        "payment_methods": [
+            {
+                "id": method["id"],
+                "label": method["label"],
+                "detail_label": method["detail_label"],
+                "key_value": method["key_value"],
+                "instructions": method["instructions"],
+            }
+            for method in list_payment_methods(settings.database_path, active_only=True)
+        ],
     }
 
 
@@ -682,6 +706,7 @@ async def shop_create_order(
     whatsapp: str = Form(min_length=7, max_length=20),
     items: str = Form(min_length=2, max_length=8000),
     discount_code: str = Form(default="", max_length=40),
+    payment_method: str = Form(default="", max_length=80),
     receipt: UploadFile = File(...),
 ) -> dict:
     limiter.hit(f"order:{client_ip(request)}", 8, 300)
@@ -698,6 +723,7 @@ async def shop_create_order(
             items=parsed_items,
             discount_code=discount_code,
             receipt_path=receipt_path,
+            payment_method=payment_method,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -812,7 +838,9 @@ def _order_review_html(order: dict, *, notice: str = "", customer_url: str = "",
 </style></head><body><main>
   <p>Pedido #{int(order['id'])} · {html.escape(status)}</p>
   <h1>{html.escape(order['payer_name'])}</h1>
-  <p>WhatsApp {html.escape(order['whatsapp'])}<br>Total {html.escape(format_cop(int(order['total'])))}</p>
+  <p>WhatsApp {html.escape(order['whatsapp'])}<br>
+  Forma de pago: {html.escape(order.get('payment_method') or 'No indicada')}<br>
+  Total {html.escape(format_cop(int(order['total'])))}</p>
   <ul>{lines}</ul>
   <img src="/pedido/{html.escape(order['token'])}/comprobante" alt="Comprobante de pago">
   {note}{actions}{send}
@@ -985,6 +1013,60 @@ def remove_shop_discount(
 ) -> dict[str, bool]:
     _db_call(lambda: delete_shop_discount(settings.database_path, discount_id), status_code=404)
     _audit(request, "shop_discount_delete", target=str(discount_id))
+    return {"deleted": True}
+
+
+@app.post("/api/admin/shop/payments")
+def add_shop_payment(
+    payload: ShopPaymentRequest,
+    request: Request,
+    _: dict = Depends(require_admin),
+) -> dict[str, int]:
+    method_id = _db_call(
+        lambda: create_payment_method(
+            settings.database_path,
+            label=payload.label,
+            detail_label=payload.detail_label,
+            key_value=payload.key_value,
+            instructions=payload.instructions,
+            active=payload.active,
+        )
+    )
+    _audit(request, "shop_payment_create", target=str(method_id), detail=payload.label)
+    return {"id": method_id}
+
+
+@app.put("/api/admin/shop/payments/{method_id}")
+def edit_shop_payment(
+    method_id: int,
+    payload: ShopPaymentRequest,
+    request: Request,
+    _: dict = Depends(require_admin),
+) -> dict[str, bool]:
+    _db_call(
+        lambda: update_payment_method(
+            settings.database_path,
+            method_id,
+            label=payload.label,
+            detail_label=payload.detail_label,
+            key_value=payload.key_value,
+            instructions=payload.instructions,
+            active=payload.active,
+        ),
+        status_code=404,
+    )
+    _audit(request, "shop_payment_update", target=str(method_id), detail=payload.label)
+    return {"updated": True}
+
+
+@app.delete("/api/admin/shop/payments/{method_id}")
+def remove_shop_payment(
+    method_id: int,
+    request: Request,
+    _: dict = Depends(require_admin),
+) -> dict[str, bool]:
+    _db_call(lambda: delete_payment_method(settings.database_path, method_id), status_code=404)
+    _audit(request, "shop_payment_delete", target=str(method_id))
     return {"deleted": True}
 
 

@@ -505,7 +505,7 @@ function platformLabel(key) {
 }
 
 function shopData() {
-  return data.shop || { products: [], combos: [], discounts: [], stock: [], summary: {} };
+  return data.shop || { products: [], combos: [], discounts: [], stock: [], payments: [], summary: {} };
 }
 
 function showShopTab(tab) {
@@ -596,6 +596,21 @@ function resetShopDiscountForm() {
       document.querySelector("#shop-discount-type").value = "percent";
       document.querySelector("#shop-discount-active").value = "1";
       document.querySelector("#shop-discount-code").disabled = false;
+    },
+  });
+}
+
+function resetShopPaymentForm() {
+  resetEntityForm({
+    idField: "#shop-payment-edit-id",
+    form: "#shop-payment-form",
+    titleEl: "#shop-payment-form-title",
+    submitEl: "#shop-payment-submit",
+    cancelEl: "#shop-payment-cancel",
+    createTitle: "Agregar forma de pago",
+    createSubmit: "Agregar forma de pago",
+    after: () => {
+      document.querySelector("#shop-payment-active").value = "1";
     },
   });
 }
@@ -715,6 +730,21 @@ function renderShop() {
     "No hay cupones todavía."
   );
 
+  const paymentQuery = document.querySelector("#shop-payment-search")?.value || "";
+  const payments = (shop.payments || []).filter((method) =>
+    matchesSearch(`${method.label} ${method.key_value} ${method.instructions}`, paymentQuery)
+  );
+  document.querySelector("#shop-payments-list").innerHTML = listOrEmpty(
+    payments,
+    (method) => miniCard(`
+      ${cardHead(escapeHtml(method.label), `<span class="badge ${method.active ? "green" : "red"}">${method.active ? "Activa" : "Oculta"}</span>`)}
+      <span>${escapeHtml(method.detail_label || "Dato")}: ${escapeHtml(method.key_value)}</span>
+      <small>${escapeHtml(method.instructions || "Sin instrucciones")}</small>
+      ${actionButtons(method.id, "edit-shop-payment", "delete-shop-payment")}
+    `),
+    "No hay formas de pago todavía."
+  );
+
   fillShopStockProductSelect(document.querySelector("#shop-stock-product")?.value || "");
   const stockQuery = document.querySelector("#shop-stock-search")?.value || "";
   const stock = (shop.stock || []).filter((s) =>
@@ -724,8 +754,9 @@ function renderShop() {
   document.querySelector("#shop-stock-list").innerHTML = listOrEmpty(
     stock,
     (item) => miniCard(`
-      ${cardHead(escapeHtml(item.product_label), `<span class="badge ${item.status === "available" ? "green" : item.status === "reserved" ? "yellow" : "red"}">${statusLabel[item.status] || item.status}</span>`)}
+      ${cardHead(escapeHtml(item.product_label), `<span class="badge ${item.on_duty ? "green" : item.status === "available" ? "yellow" : "red"}">${item.on_duty ? "En turno" : (statusLabel[item.status] || item.status)}</span>`)}
       <span>${escapeHtml(item.login)}</span>
+      <small>Se entrega en 2 pagos y luego pasa a la siguiente. Lleva ${item.sale_count || 0}.</small>
       <small>Pass: ${escapeHtml(item.password || "—")}</small>
       <small>${escapeHtml(item.notes || "Sin notas")}</small>
       ${actionButtons(item.id, "edit-shop-stock", "delete-shop-stock")}
@@ -793,6 +824,23 @@ function fillShopDiscountForm(discount) {
     submitEl: "#shop-discount-submit",
     cancelEl: "#shop-discount-cancel",
     editTitle: "Editar descuento",
+  });
+}
+
+function fillShopPaymentForm(method) {
+  showPanel("shop");
+  showShopTab("payments");
+  document.querySelector("#shop-payment-edit-id").value = method.id;
+  document.querySelector("#shop-payment-label").value = method.label;
+  document.querySelector("#shop-payment-detail").value = method.detail_label || "";
+  document.querySelector("#shop-payment-key").value = method.key_value;
+  document.querySelector("#shop-payment-instructions").value = method.instructions || "";
+  document.querySelector("#shop-payment-active").value = method.active ? "1" : "0";
+  setEditMode({
+    titleEl: "#shop-payment-form-title",
+    submitEl: "#shop-payment-submit",
+    cancelEl: "#shop-payment-cancel",
+    editTitle: "Editar forma de pago",
   });
 }
 
@@ -916,6 +964,11 @@ dashboard.addEventListener("click", async (event) => {
     if (discount) fillShopDiscountForm(discount);
     return;
   }
+  if (button.classList.contains("edit-shop-payment")) {
+    const method = (shopData().payments || []).find((item) => item.id === Number(button.dataset.id));
+    if (method) fillShopPaymentForm(method);
+    return;
+  }
   if (button.classList.contains("edit-shop-stock")) {
     const item = shopData().stock.find((row) => row.id === Number(button.dataset.id));
     if (item) fillShopStockForm(item);
@@ -929,6 +982,7 @@ dashboard.addEventListener("click", async (event) => {
     ["delete-shop-product", "¿Eliminar este producto del catálogo?", `/api/admin/shop/products/${button.dataset.id}`, resetShopProductForm, "Producto eliminado."],
     ["delete-shop-combo", "¿Eliminar este combo?", `/api/admin/shop/combos/${button.dataset.id}`, resetShopComboForm, "Combo eliminado."],
     ["delete-shop-discount", "¿Eliminar este cupón?", `/api/admin/shop/discounts/${button.dataset.id}`, resetShopDiscountForm, "Descuento eliminado."],
+    ["delete-shop-payment", "¿Eliminar esta forma de pago?", `/api/admin/shop/payments/${button.dataset.id}`, resetShopPaymentForm, "Forma de pago eliminada."],
     ["delete-shop-stock", "¿Eliminar esta cuenta del stock?", `/api/admin/shop/stock/${button.dataset.id}`, resetShopStockForm, "Cuenta de stock eliminada."],
   ];
   for (const [cls, confirmText, url, reset, ok] of deletes) {
@@ -979,6 +1033,7 @@ document.querySelector("#client-cancel-edit").addEventListener("click", resetCli
 document.querySelector("#shop-product-cancel")?.addEventListener("click", resetShopProductForm);
 document.querySelector("#shop-combo-cancel")?.addEventListener("click", resetShopComboForm);
 document.querySelector("#shop-discount-cancel")?.addEventListener("click", resetShopDiscountForm);
+document.querySelector("#shop-payment-cancel")?.addEventListener("click", resetShopPaymentForm);
 document.querySelector("#shop-stock-cancel")?.addEventListener("click", resetShopStockForm);
 
 document.querySelectorAll(".shop-tab").forEach((button) => {
@@ -1134,6 +1189,26 @@ document.querySelector("#shop-discount-form")?.addEventListener("submit", async 
   });
 });
 
+document.querySelector("#shop-payment-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const editId = document.querySelector("#shop-payment-edit-id").value;
+  await submitEntity({
+    editId,
+    createUrl: "/api/admin/shop/payments",
+    updateUrl: `/api/admin/shop/payments/${editId}`,
+    payload: {
+      label: document.querySelector("#shop-payment-label").value,
+      detail_label: document.querySelector("#shop-payment-detail").value || "Llave",
+      key_value: document.querySelector("#shop-payment-key").value,
+      instructions: document.querySelector("#shop-payment-instructions").value,
+      active: document.querySelector("#shop-payment-active").value === "1",
+    },
+    reset: resetShopPaymentForm,
+    okCreate: "Forma de pago agregada.",
+    okUpdate: "Forma de pago actualizada.",
+  });
+});
+
 document.querySelector("#shop-stock-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const editId = document.querySelector("#shop-stock-edit-id").value;
@@ -1175,6 +1250,7 @@ document.querySelector("#assignment-date")?.addEventListener("input", updateAssi
   "#shop-product-search",
   "#shop-combo-search",
   "#shop-discount-search",
+  "#shop-payment-search",
   "#shop-stock-search",
 ].forEach((selector) => {
   document.querySelector(selector)?.addEventListener("input", render);
